@@ -111,6 +111,10 @@ html { scroll-behavior: smooth; }
     [data-r="popupoverlay"], [data-r="popupcard"] { animation: none; }
   }
 
+  @media (max-width: 940px) {
+    [data-r="burger"] { margin-left: auto; }
+  }
+
   /* laptop — tighten the header before anything can crowd */
   @media (max-width: 1180px) {
     [data-r="desktop-nav"] { gap: 18px; }
