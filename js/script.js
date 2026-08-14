@@ -7,15 +7,12 @@
 
 /* ── 1. TRACKING IDS ─────────────────────────────────────────────────────── */
 
-// Meta Pixel — live.
-var META_PIXEL_ID = "1627930795149614";
-
 // GA4 — paste the real Measurement ID (looks like "G-XXXXXXXXXX").
 // While this is empty, no GA4 script loads and no GA4 events are sent.
 var GA4_MEASUREMENT_ID = "";
 
-// Tracking only runs on the production domain, so previews and local work
-// never pollute ad or analytics data. Add hosts here if that changes.
+// Analytics only runs on the production domain, so previews and local work
+// never pollute analytics data. Add hosts here if that changes.
 var LIVE_HOSTS = ["anjaliretail.com", "www.anjaliretail.com"];
 
 /* ── 2. CURRENT STORE OFFER ──────────────────────────────────────────────────
@@ -81,24 +78,11 @@ var REVIEWS = [
     });
   };
 
-  /* ── Analytics: one Pixel, one GA4, no duplicates ── */
+  /* ── Analytics: one GA4 install, no duplicates ── */
 
   var live = LIVE_HOSTS.indexOf(location.hostname) !== -1;
 
   if (live) {
-    if (!window.fbq) {
-      (function (f, b, e, v, n, t, s) {
-        if (f.fbq) return; n = f.fbq = function () {
-          n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
-        };
-        if (!f._fbq) f._fbq = n;
-        n.push = n; n.loaded = true; n.version = "2.0"; n.queue = [];
-        t = b.createElement(e); t.async = true; t.src = v;
-        s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s);
-      })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
-      window.fbq("init", META_PIXEL_ID);
-      window.fbq("track", "PageView");   // fires exactly once
-    }
     if (GA4_MEASUREMENT_ID && !window.gtag) {
       var g = document.createElement("script");
       g.async = true;
@@ -113,7 +97,6 @@ var REVIEWS = [
 
   function track(name, params) {
     params = params || {};
-    if (window.fbq) window.fbq("trackCustom", name, params);
     if (window.gtag) window.gtag("event", name, params);
   }
 
