@@ -7,14 +7,6 @@
 
 /* ── 1. TRACKING IDS ─────────────────────────────────────────────────────── */
 
-// GA4 — paste the real Measurement ID (looks like "G-XXXXXXXXXX").
-// While this is empty, no GA4 script loads and no GA4 events are sent.
-var GA4_MEASUREMENT_ID = "";
-
-// Analytics only runs on the production domain, so previews and local work
-// never pollute analytics data. Add hosts here if that changes.
-var LIVE_HOSTS = ["anjaliretail.com", "www.anjaliretail.com"];
-
 /* ── 2. CURRENT STORE OFFER ──────────────────────────────────────────────────
    ONE source of truth. Feeds both the Store Offers section and the popup.
    To launch a new offer, edit this object only. */
@@ -78,25 +70,15 @@ var REVIEWS = [
     });
   };
 
-  /* ── Analytics: one GA4 install, no duplicates ── */
-
-  var live = LIVE_HOSTS.indexOf(location.hostname) !== -1;
-
-  if (live) {
-    if (GA4_MEASUREMENT_ID && !window.gtag) {
-      var g = document.createElement("script");
-      g.async = true;
-      g.src = "https://www.googletagmanager.com/gtag/js?id=" + GA4_MEASUREMENT_ID;
-      document.head.appendChild(g);
-      window.dataLayer = window.dataLayer || [];
-      window.gtag = function () { window.dataLayer.push(arguments); };
-      window.gtag("js", new Date());
-      window.gtag("config", GA4_MEASUREMENT_ID);  // sends page_view once
-    }
-  }
+  /* ── Event dispatch ────────────────────────────────────────────────────────
+     The GA4 tag (G-JY51RSTE6V) and Meta Pixel (1627930795149614) base codes are
+     installed once each, in the <head> of every page. They send page_view and
+     PageView on load. This helper only forwards CUSTOM events to whichever of
+     them has loaded — it never initialises either, so nothing double-fires. */
 
   function track(name, params) {
     params = params || {};
+    if (window.fbq) window.fbq("trackCustom", name, params);
     if (window.gtag) window.gtag("event", name, params);
   }
 
