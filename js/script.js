@@ -125,20 +125,26 @@ var REVIEWS = [
   var grid = $("#offers-grid");
   if (grid) {
     grid.innerHTML = OFFER.items.filter(function (o) { return !o.popupOnly; }).map(function (o) {
-      return '<a href="' + esc(OFFER.whatsappUrl) + '" target="_blank" rel="noopener noreferrer" data-offer="' + esc(o.id) + '" data-h="offer-card" ' +
-        'style="display:block;border:1px solid #f0e6e6;border-radius:18px;overflow:hidden;background:#fff">' +
+      return '<button type="button" data-offer="' + esc(o.id) + '" data-h="offer-card" ' +
+        'style="display:block;width:100%;text-align:left;padding:0;font:inherit;color:inherit;cursor:pointer;border:1px solid #f0e6e6;border-radius:18px;overflow:hidden;background:#fff">' +
         '<img src="' + esc(o.image) + '" alt="' + esc(o.alt) + '" width="1200" height="628" loading="lazy" decoding="async" style="display:block;width:100%;height:auto">' +
         '<div style="padding:18px 20px 20px">' +
         '<h3 style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:800;font-size:17px;margin:0;color:#14100f;letter-spacing:-0.3px">' + esc(o.cardTitle) + '</h3>' +
         '<p style="font-size:13px;line-height:1.6;color:#6b6261;margin:7px 0 0">' + esc(o.cardText) + '</p>' +
         '<p style="font-size:11.5px;font-weight:700;letter-spacing:0.6px;color:#ED111B;margin:12px 0 0">' + esc(OFFER.validityShort) + '</p>' +
-        '</div></a>';
+        '</div></button>';
     }).join("");
-    grid.addEventListener("click", function (e) {
-      var a = e.target.closest("[data-offer]");
-      if (a) { track("offer_click", { offer_id: a.getAttribute("data-offer") }); track("whatsapp_click"); }
-    });
   }
+
+  /* An offer card opens the Store Offers popup — it never jumps straight to
+     WhatsApp. Only the popup's own WhatsApp button does that. */
+  document.addEventListener("click", function (e) {
+    var card = e.target.closest("[data-offer]");
+    if (!card || e.target.closest("[data-popup-cta]")) return;
+    e.preventDefault();
+    track("offer_click", { offer_id: card.getAttribute("data-offer") });
+    openPopup();
+  });
 
   /* ── Offer popup ── */
 
