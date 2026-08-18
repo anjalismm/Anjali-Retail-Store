@@ -34,6 +34,17 @@ var OFFER = {
       cardTitle: "1 Litre Anjali Sesame Oil for \u20B9200",
       cardText: "Spend \u20B92000 and add a 1 litre bottle of Anjali cold-pressed sesame oil for just \u20B9200.",
       popupText: "Spend \u20B92000 \u2192 Get 1 Litre Gingelly Oil for \u20B9200"
+    },
+    {
+      id: "new-customer-welcome",
+      image: "assets/images/offer-welcome.webp",
+      alt: "New customer welcome offer \u2014 \u20B950 instant discount",
+      cardTitle: "New Customer Welcome Offer \u2014 Get \u20B950 Instantly!",
+      cardText: "Register your mobile number at Anjali Retail, shop for \u20B9500 or more, and get a flat \u20B950 instant discount at checkout.",
+      popupText: "New Customer Offer: Register your mobile number \u2192 Shop above \u20B9500 \u2192 Get \u20B950 instant discount on your bill",
+      // This offer has its own full-width card written directly into index.html,
+      // so it appears in the popup only — the section grid skips it.
+      popupOnly: true
     }
   ]
 };
@@ -113,7 +124,7 @@ var REVIEWS = [
 
   var grid = $("#offers-grid");
   if (grid) {
-    grid.innerHTML = OFFER.items.map(function (o) {
+    grid.innerHTML = OFFER.items.filter(function (o) { return !o.popupOnly; }).map(function (o) {
       return '<a href="' + esc(OFFER.whatsappUrl) + '" target="_blank" rel="noopener noreferrer" data-offer="' + esc(o.id) + '" data-h="offer-card" ' +
         'style="display:block;border:1px solid #f0e6e6;border-radius:18px;overflow:hidden;background:#fff">' +
         '<img src="' + esc(o.image) + '" alt="' + esc(o.alt) + '" width="1200" height="628" loading="lazy" decoding="async" style="display:block;width:100%;height:auto">' +

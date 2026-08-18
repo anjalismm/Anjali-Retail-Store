@@ -115,6 +115,11 @@ html { scroll-behavior: smooth; }
     [data-r="burger"] { margin-left: auto; }
   }
 
+  /* Store Offers — 2 across, Offer 3 centred on row 2; stacked on mobile */
+  @media (max-width: 720px) {
+    [data-r="offergrid"] { grid-template-columns: minmax(0, 1fr) !important; }
+  }
+
   /* laptop — tighten the header before anything can crowd */
   @media (max-width: 1180px) {
     [data-r="desktop-nav"] { gap: 18px; }
