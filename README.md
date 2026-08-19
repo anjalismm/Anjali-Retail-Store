@@ -205,6 +205,29 @@ committed to git.
 If either variable is missing the route logs a warning and returns
 `{forwarded:false}`; the browser Pixel keeps working and the page is unaffected.
 
+#### Identifiers and match quality
+
+Meta scores how well it can attribute events by how consistently they carry
+identifying parameters. This site sends four, on **every** event, browser and
+server alike — and deliberately **no PII**: no name, email or phone is collected
+anywhere, and the Conversions API route never accepts or forwards any.
+
+| Parameter | Source |
+|---|---|
+| `client_ip_address` | Request headers (`x-vercel-forwarded-for` → `x-forwarded-for` → `x-real-ip` → `cf-connecting-ip` → socket) |
+| `client_user_agent` | `user-agent` request header |
+| `fbp` | `_fbp` cookie — seeded in `<head>` if absent, so it exists before the first event |
+| `fbc` | `?fbclid=` on the landing URL → `_fbc` cookie → `fbclid` recovered from `event_source_url` |
+
+`fbp` and `fbc` are written in Meta's own formats (`fb.1.<ms>.<value>`) so
+`fbevents.js` reuses the same values rather than generating competing ones. That
+matters: browser and server halves must agree, or dedup breaks.
+
+When someone arrives from a Meta ad the URL carries `?fbclid=…`. That is captured
+into `_fbc` synchronously in `<head>`, before the Pixel fires, and sent on both
+halves of every subsequent event — which is what connects a conversion back to
+the ad that produced it.
+
 To watch server events arrive live, add a third variable
 `META_TEST_EVENT_CODE` with the code from **Events Manager → Test Events**, then
 remove it once verified.

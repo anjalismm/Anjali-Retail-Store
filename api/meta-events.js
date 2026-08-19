@@ -9,6 +9,10 @@
  *   META_ACCESS_TOKEN  system-user token from Events Manager → Settings
  *
  * Never expose META_ACCESS_TOKEN to the browser. It only lives here.
+ *
+ * NO PII. This site collects no name, email or phone, and this route never
+ * accepts or forwards any. The only identifiers sent are the visitor's IP,
+ * user agent, and the _fbp / _fbc browser cookies — all non-personal.
  */
 
 const GRAPH_VERSION = "v19.0";
@@ -21,16 +25,50 @@ const STANDARD_EVENTS = new Set([
   "StartTrial", "SubmitApplication", "Subscribe"
 ]);
 
+/**
+ * Client IP. Vercel always sets x-forwarded-for, but check every header a proxy
+ * might use before falling back to the socket — an event missing
+ * client_ip_address costs match quality, so this must never come back empty.
+ */
 function clientIp(req) {
-  const fwd = req.headers["x-forwarded-for"];
-  if (typeof fwd === "string" && fwd.length) return fwd.split(",")[0].trim();
-  return (req.socket && req.socket.remoteAddress) || undefined;
+  const candidates = [
+    req.headers["x-vercel-forwarded-for"],
+    req.headers["x-forwarded-for"],
+    req.headers["x-real-ip"],
+    req.headers["cf-connecting-ip"]
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string" && raw.trim()) {
+      // x-forwarded-for is a chain; the left-most entry is the real client.
+      const first = raw.split(",")[0].trim();
+      if (first) return first;
+    }
+  }
+  const sock = (req.socket && req.socket.remoteAddress) ||
+    (req.connection && req.connection.remoteAddress);
+  if (!sock) return undefined;
+  // Strip the IPv4-mapped IPv6 prefix Node reports for IPv4 clients.
+  return sock.replace(/^::ffff:/, "");
 }
 
 function readCookie(header, name) {
   if (!header) return undefined;
   const match = header.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
   return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+/** fbc from a raw fbclid, in the format Meta expects: fb.1.<ms>.<fbclid> */
+function fbcFromFbclid(fbclid, whenMs) {
+  if (!fbclid) return undefined;
+  return "fb.1." + (whenMs || Date.now()) + "." + fbclid;
+}
+
+/** Last-resort fbc recovery: pull fbclid off the page URL the event came from. */
+function fbclidFromUrl(url) {
+  if (!url) return undefined;
+  const m = String(url).match(/[?&]fbclid=([^&#]+)/);
+  if (!m) return undefined;
+  try { return decodeURIComponent(m[1]); } catch (err) { return m[1]; }
 }
 
 module.exports = async function handler(req, res) {
@@ -48,7 +86,10 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ forwarded: false, reason: "not_configured" });
   }
 
+  // Body can arrive pre-parsed, as a string, or as a Buffer depending on how it
+  // was sent (fetch vs sendBeacon Blob). Handle all three.
   let payload = req.body;
+  if (Buffer.isBuffer(payload)) payload = payload.toString("utf8");
   if (typeof payload === "string") {
     try { payload = JSON.parse(payload); } catch (err) { payload = null; }
   }
@@ -72,15 +113,37 @@ module.exports = async function handler(req, res) {
 
   const cookieHeader = req.headers.cookie;
 
-  // user_data carries no PII — this site collects none. Just the Meta browser
-  // cookies plus IP and user agent, which is what CAPI needs for matching.
+  /* user_data — non-personal identifiers only, each with a fallback chain so it
+     is present on 100% of events:
+       client_ip_address  request headers → socket
+       client_user_agent  user-agent header
+       fbp                request body → _fbp cookie
+       fbc                request body → _fbc cookie → fbclid on the source URL
+     No hashed or unhashed name, email or phone is ever attached. */
+  const resolvedFbc =
+    fbc ||
+    readCookie(cookieHeader, "_fbc") ||
+    fbcFromFbclid(fbclidFromUrl(event_source_url), Number(event_time) * 1000);
+
   const user_data = {
     client_ip_address: clientIp(req),
     client_user_agent: req.headers["user-agent"],
     fbp: fbp || readCookie(cookieHeader, "_fbp"),
-    fbc: fbc || readCookie(cookieHeader, "_fbc")
+    fbc: resolvedFbc
   };
-  Object.keys(user_data).forEach(k => user_data[k] === undefined && delete user_data[k]);
+  Object.keys(user_data).forEach(k => {
+    if (user_data[k] === undefined || user_data[k] === null || user_data[k] === "") {
+      delete user_data[k];
+    }
+  });
+
+  // Surfaced in the response so a missing identifier is diagnosable rather than
+  // silently eroding match quality.
+  const missing = ["client_ip_address", "client_user_agent", "fbp"]
+    .filter(k => !user_data[k]);
+  if (missing.length) {
+    console.warn("Meta CAPI: event " + event_name + " missing " + missing.join(", "));
+  }
 
   const event = {
     event_name,
@@ -123,6 +186,8 @@ module.exports = async function handler(req, res) {
       event_name,
       event_id,
       standard: STANDARD_EVENTS.has(event_name),
+      sent: Object.keys(user_data),
+      missing,
       events_received: result.events_received
     });
   } catch (err) {

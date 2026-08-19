@@ -101,28 +101,91 @@ var REVIEWS = [
     return m ? decodeURIComponent(m[1]) : undefined;
   }
 
-  /* Forward one event to the Conversions API. Fire-and-forget: a failure here
-     never affects the page, and the browser Pixel has already sent its copy. */
+  function writeCookie(name, value) {
+    // 90 days, the same window Meta's own pixel uses for _fbp / _fbc.
+    var exp = new Date(Date.now() + 90 * 864e5).toUTCString();
+    document.cookie = name + "=" + value + ";expires=" + exp + ";path=/;SameSite=Lax";
+  }
+
+  /* ── Browser identifiers (fbp / fbc) ───────────────────────────────────────
+     These are the ONLY identifiers this site handles. No name, email or phone
+     is collected anywhere — deliberately.
+
+     fbp = first-party browser id.  Format: fb.1.<created_ms>.<random>
+     fbc = Meta click id.           Format: fb.1.<click_ms>.<fbclid>
+
+     fbevents.js writes both itself, but ASYNCHRONOUSLY — on a first visit the
+     cookies do not exist yet when the first event fires. Writing them here,
+     synchronously, in Meta's exact format guarantees every event carries them.
+     When fbevents.js later finds a valid cookie it reuses it, so the browser
+     and server halves agree on the same values. */
+
+  function ensureFbp() {
+    var fbp = readCookie("_fbp");
+    if (fbp) return fbp;
+    var rand = (window.crypto && window.crypto.getRandomValues)
+      ? window.crypto.getRandomValues(new Uint32Array(2))[0] + "" +
+        window.crypto.getRandomValues(new Uint32Array(1))[0]
+      : String(Math.round(Math.random() * 2147483647)) + String(Math.round(Math.random() * 2147483647));
+    fbp = "fb.1." + Date.now() + "." + rand;
+    writeCookie("_fbp", fbp);
+    return fbp;
+  }
+
+  function ensureFbc() {
+    // A fresh ?fbclid= on the URL always wins — it is a newer ad click than
+    // whatever the cookie holds.
+    var fbclid = null;
+    try {
+      fbclid = new URLSearchParams(location.search).get("fbclid");
+    } catch (err) {
+      var m = location.search.match(/[?&]fbclid=([^&]+)/);
+      fbclid = m ? decodeURIComponent(m[1]) : null;
+    }
+    if (fbclid) {
+      var fbc = "fb.1." + Date.now() + "." + fbclid;
+      writeCookie("_fbc", fbc);
+      return fbc;
+    }
+    return readCookie("_fbc") || undefined;
+  }
+
+  // Resolved once, before any event fires, so every event sends identical values.
+  var FBP = ensureFbp();
+  var FBC = ensureFbc();
+
+  /* Forward one event to the Conversions API.
+
+     Uses fetch(keepalive) as the PRIMARY transport, not sendBeacon: sendBeacon
+     returns false when the browser's queue is full and silently drops the
+     event, which is why early events were arriving without their identifiers.
+     sendBeacon is kept only as a fallback for browsers without fetch. */
   function forwardToCapi(name, id, params) {
-    var body = JSON.stringify({
+    var payload = {
       event_name: name,
       event_id: id,
       event_time: Math.floor(Date.now() / 1000),
       event_source_url: location.href,
       custom_data: params || {},
-      fbp: readCookie("_fbp"),
-      fbc: readCookie("_fbc")
-    });
+      fbp: FBP,
+      fbc: FBC
+    };
+    var body = JSON.stringify(payload);
     try {
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon("/api/meta-events", new Blob([body], { type: "application/json" }));
-      } else {
+      if (window.fetch) {
         fetch("/api/meta-events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: body,
-          keepalive: true
-        }).catch(function () {});
+          keepalive: true,
+          credentials: "same-origin"   // cookies must ride along for _fbp / _fbc
+        }).catch(function () {
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon("/api/meta-events", new Blob([body], { type: "application/json" }));
+          }
+        });
+      } else if (navigator.sendBeacon) {
+        navigator.sendBeacon("/api/meta-events", new Blob([body], { type: "application/json" }));
       }
     } catch (err) { /* never surface tracking errors to the visitor */ }
   }
@@ -130,13 +193,17 @@ var REVIEWS = [
   function track(name, params) {
     params = params || {};
     var id = eventId();
-    if (window.fbq) window.fbq("trackCustom", name, params, { eventID: id });
+    // The browser Pixel gets the same fbp/fbc, so both halves match on dedup.
+    if (window.fbq) {
+      window.fbq("trackCustom", name, params, { eventID: id });
+    }
     forwardToCapi(name, id, params);
     if (window.gtag) window.gtag("event", name, params);
   }
 
   /* PageView: the <head> Pixel already fired its browser copy with the event_id
-     stamped on window.__arPageViewId. Send the server copy under the same id. */
+     stamped on window.__arPageViewId. Send the server copy under the same id,
+     now that fbp and fbc are guaranteed to exist. */
   if (window.__arPageViewId) forwardToCapi("PageView", window.__arPageViewId, {});
 
   /* Declarative click tracking: data-act="whatsapp_click" etc. */

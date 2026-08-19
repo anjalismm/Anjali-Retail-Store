@@ -32,6 +32,29 @@ t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '1627930795149614');
+
+// Non-personal identifiers only — no name, email or phone anywhere on this site.
+// _fbp and _fbc are written synchronously here so the very first PageView
+// carries them; fbevents.js reuses these exact values, and js/script.js sends
+// the same pair to the Conversions API. That keeps browser and server halves
+// matched on every event.
+(function () {
+  function get(n) {
+    var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + n + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function set(n, v) {
+    document.cookie = n + '=' + v + ';expires=' +
+      new Date(Date.now() + 90 * 864e5).toUTCString() + ';path=/;SameSite=Lax';
+  }
+  if (!get('_fbp')) {
+    set('_fbp', 'fb.1.' + Date.now() + '.' +
+      Math.round(Math.random() * 2147483647) + Math.round(Math.random() * 2147483647));
+  }
+  var m = location.search.match(/[?&]fbclid=([^&]+)/);
+  if (m) set('_fbc', 'fb.1.' + Date.now() + '.' + decodeURIComponent(m[1]));
+})();
+
 // Shared event_id: js/script.js sends the Conversions API copy of this same
 // PageView under this id, so Meta deduplicates the pair into one event.
 window.__arPageViewId = (window.crypto && window.crypto.randomUUID)
