@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://anjali-retail-store.vercel.app/sitemap.xml

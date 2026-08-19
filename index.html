@@ -78,7 +78,12 @@ t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '1627930795149614');
-fbq('track', 'PageView');
+// Shared event_id: js/script.js sends the Conversions API copy of this same
+// PageView under this id, so Meta deduplicates the pair into one event.
+window.__arPageViewId = (window.crypto && window.crypto.randomUUID)
+  ? window.crypto.randomUUID()
+  : 'pv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
+fbq('track', 'PageView', {}, { eventID: window.__arPageViewId });
 </script>
 <noscript><img height="1" width="1" style="display:none"
 src="https://www.facebook.com/tr?id=1627930795149614&ev=PageView&noscript=1"

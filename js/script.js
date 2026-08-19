@@ -83,15 +83,61 @@ var REVIEWS = [
 
   /* ── Event dispatch ────────────────────────────────────────────────────────
      The GA4 tag (G-JY51RSTE6V) and Meta Pixel (1627930795149614) base codes are
-     installed once each, in the <head> of every page. They send page_view and
-     PageView on load. This helper only forwards CUSTOM events to whichever of
-     them has loaded — it never initialises either, so nothing double-fires. */
+     installed once each, in the <head> of every page. This helper never
+     initialises either — it only forwards CUSTOM events, so nothing
+     double-fires.
+
+     Every Meta event carries an event_id that is ALSO sent to the Conversions
+     API route (/api/meta-events). Matching ids let Meta collapse the browser
+     event and the server event into one. */
+
+  function eventId() {
+    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    return "e-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 11);
+  }
+
+  function readCookie(name) {
+    var m = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
+    return m ? decodeURIComponent(m[1]) : undefined;
+  }
+
+  /* Forward one event to the Conversions API. Fire-and-forget: a failure here
+     never affects the page, and the browser Pixel has already sent its copy. */
+  function forwardToCapi(name, id, params) {
+    var body = JSON.stringify({
+      event_name: name,
+      event_id: id,
+      event_time: Math.floor(Date.now() / 1000),
+      event_source_url: location.href,
+      custom_data: params || {},
+      fbp: readCookie("_fbp"),
+      fbc: readCookie("_fbc")
+    });
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon("/api/meta-events", new Blob([body], { type: "application/json" }));
+      } else {
+        fetch("/api/meta-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: body,
+          keepalive: true
+        }).catch(function () {});
+      }
+    } catch (err) { /* never surface tracking errors to the visitor */ }
+  }
 
   function track(name, params) {
     params = params || {};
-    if (window.fbq) window.fbq("trackCustom", name, params);
+    var id = eventId();
+    if (window.fbq) window.fbq("trackCustom", name, params, { eventID: id });
+    forwardToCapi(name, id, params);
     if (window.gtag) window.gtag("event", name, params);
   }
+
+  /* PageView: the <head> Pixel already fired its browser copy with the event_id
+     stamped on window.__arPageViewId. Send the server copy under the same id. */
+  if (window.__arPageViewId) forwardToCapi("PageView", window.__arPageViewId, {});
 
   /* Declarative click tracking: data-act="whatsapp_click" etc. */
   var ACT = {
